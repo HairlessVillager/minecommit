@@ -3,7 +3,8 @@ use simdnbt::borrow;
 use simdnbt::owned::{self, BaseNbt, NbtCompound, NbtList};
 use simdnbt::{Deserialize, Serialize};
 
-use super::palette::{MinecraftDataMapping, dump_biome, dump_block, load_biome, load_block};
+use super::mapping::MinecraftDataMapping;
+use super::palette::{dump_biome, dump_block, load_biome, load_block};
 
 pub fn split_chunk(
     mapping: &MinecraftDataMapping,

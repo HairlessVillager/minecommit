@@ -6,29 +6,7 @@ use simdnbt::{
     owned::{NbtCompound, NbtList, NbtTag},
 };
 
-pub struct MinecraftDataMapping;
-
-impl MinecraftDataMapping {
-    fn biome_id_from_name(&self, name: &str) -> Result<u8> {
-        todo!()
-    }
-    fn biome_name_from_id(&self, id: u8) -> Result<&'static str> {
-        todo!()
-    }
-    fn block_state_id_from_name_and_props(
-        &self,
-        name: &str,
-        props: &[(&str, &str)],
-    ) -> Result<u16> {
-        todo!()
-    }
-    fn block_name_and_props_from_state_id(
-        &self,
-        state_id: u16,
-    ) -> Result<(String, Vec<(&'static str, &'static str)>)> {
-        todo!()
-    }
-}
+use super::mapping::MinecraftDataMapping;
 
 type Cube<T, const SIZE: usize> = [[[T; SIZE]; SIZE]; SIZE];
 

@@ -1,3 +1,4 @@
+mod mapping;
 mod nbt;
 mod palette;
 
@@ -8,11 +9,11 @@ use simdnbt::{Deserialize, Serialize};
 use std::io::Cursor;
 
 use super::Handler;
-use crate::handler::chunk_region::palette::MinecraftDataMapping;
 use crate::odb::{OdbReader, OdbWriter};
 use crate::utils::nbt::{dump_nbt, load_nbt, sort_nbt};
 use crate::utils::region::{parse_xz, read_region, write_region};
 
+use mapping::MinecraftDataMapping;
 use nbt::{SectionsDump, restore_chunk, split_chunk};
 
 const FLATTEN_PATTERNS: &[&str] = &["**/region/r.*.*.mca"];
@@ -26,6 +27,7 @@ impl ChunkRegionHandler {
         todo!()
     }
 }
+
 impl Handler for ChunkRegionHandler {
     fn flatten(self, save: &impl OdbReader, storage: &mut impl OdbWriter) -> Result<()> {
         let mapping = MinecraftDataMapping;
