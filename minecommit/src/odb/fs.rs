@@ -58,6 +58,7 @@ impl OdbReader for LocalFsOdb {
         )
         .context("failed to run glob")?
         .filter_map(|e| e.ok())
+        .filter(|path| path.is_file())
         .filter_map(|path| {
             path.strip_prefix(&root)
                 .ok()
