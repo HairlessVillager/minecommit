@@ -28,6 +28,7 @@ impl Handler for PoiRegionHandler {
                         .with_context(|| format!("failed to read region from {key}"))
                         .context("failed to read region")?
                 else {
+                    processed.push(key);
                     continue;
                 };
                 storage.put(&format!("{key}/timestamp-header"), &timestamp_header)?;
