@@ -1,124 +1,24 @@
-"use client"
-
-import * as React from "react"
+import { Dock } from "@/components/unlumen-ui/dock"
 import {
-  ArchiveIcon,
-  ArrowLeftIcon,
-  CalendarPlusIcon,
-  ClockIcon,
-  ListFilterIcon,
-  MailCheckIcon,
-  MoreHorizontalIcon,
-  TagIcon,
-  Trash2Icon,
+  BookDown,
+  BookUp,
+  BookUp2,
+  HardDriveDownload,
+  HardDriveUpload,
 } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
-import { ButtonGroup } from "@/components/ui/button-group"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-
-export function ButtonGroupDemo() {
-  const [label, setLabel] = React.useState("personal")
-
-  return (
-    <ButtonGroup>
-      <ButtonGroup className="hidden sm:flex">
-        <Button variant="outline" size="icon" aria-label="Go Back">
-          <ArrowLeftIcon />
-        </Button>
-      </ButtonGroup>
-      <ButtonGroup>
-        <Button variant="outline">Archive</Button>
-        <Button variant="outline">Report</Button>
-      </ButtonGroup>
-      <ButtonGroup>
-        <Button variant="outline">Snooze</Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button variant="outline" size="icon" aria-label="More Options">
-                <MoreHorizontalIcon />
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="end" className="w-40">
-            <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <MailCheckIcon />
-                Mark as Read
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <ArchiveIcon />
-                Archive
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <ClockIcon />
-                Snooze
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <CalendarPlusIcon />
-                Add to Calendar
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <ListFilterIcon />
-                Add to List
-              </DropdownMenuItem>
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <TagIcon />
-                  Label As...
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  <DropdownMenuRadioGroup
-                    value={label}
-                    onValueChange={setLabel}
-                  >
-                    <DropdownMenuRadioItem value="personal">
-                      Personal
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="work">
-                      Work
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="other">
-                      Other
-                    </DropdownMenuRadioItem>
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem variant="destructive">
-                <Trash2Icon />
-                Trash
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </ButtonGroup>
-    </ButtonGroup>
-  )
-}
+const items = [
+  { icon: <BookUp2 />, label: "快速提交 / 备份" },
+  { icon: <BookUp />, label: "备注提交 / 备份" },
+  { icon: <BookDown />, label: "检出最近提交", separator: true },
+  { icon: <HardDriveUpload />, label: "上传 / 推送" },
+  { icon: <HardDriveDownload />, label: "下载 / 拉取" },
+]
 
 export function HomePage() {
   return (
     <div className="flex w-full items-center justify-center">
-      <ButtonGroupDemo />
+      <Dock items={items} gap={6} />
     </div>
   )
 }
