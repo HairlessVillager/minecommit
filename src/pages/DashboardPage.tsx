@@ -82,13 +82,13 @@ const lineChartConfig = {
 
 export function ChartLineLabel() {
   return (
-    <Card>
+    <Card className="flex-1">
       <CardHeader>
         <CardTitle>Line Chart - Label</CardTitle>
         <CardDescription>January - June 2024</CardDescription>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={lineChartConfig}>
+        <ChartContainer config={lineChartConfig} className="max-h-62.5">
           <LineChart
             accessibilityLayer
             data={lineChartData}
@@ -132,14 +132,6 @@ export function ChartLineLabel() {
           </LineChart>
         </ChartContainer>
       </CardContent>
-      <CardFooter className="flex-col items-start gap-2 text-sm">
-        <div className="flex gap-2 leading-none font-medium">
-          Trending up by 5.2% this month <TrendingUp className="h-4 w-4" />
-        </div>
-        <div className="leading-none text-muted-foreground">
-          Showing total visitors for the last 6 months
-        </div>
-      </CardFooter>
     </Card>
   )
 }
@@ -150,7 +142,7 @@ export function ChartPieDonutText() {
   }, [])
 
   return (
-    <Card className="flex flex-col">
+    <Card className="flex w-96 flex-col">
       <CardHeader className="items-center pb-0">
         <CardTitle>Pie Chart - Donut with Text</CardTitle>
         <CardDescription>January - June 2024</CardDescription>
@@ -205,14 +197,6 @@ export function ChartPieDonutText() {
           </PieChart>
         </ChartContainer>
       </CardContent>
-      <CardFooter className="flex-col gap-2 text-sm">
-        <div className="flex items-center gap-2 leading-none font-medium">
-          Trending up by 5.2% this month <TrendingUp className="h-4 w-4" />
-        </div>
-        <div className="leading-none text-muted-foreground">
-          Showing total visitors for the last 6 months
-        </div>
-      </CardFooter>
     </Card>
   )
 }
@@ -240,14 +224,27 @@ const contributonData = [
   { date: "2026-03-30", count: 5 },
 ]
 
+function CardActivityGraph() {
+  return (
+    <Card className="flex flex-col">
+      <CardHeader className="items-center pb-0">
+        <CardTitle>Pie Chart - Donut with Text</CardTitle>
+        <CardDescription>January - June 2024</CardDescription>
+      </CardHeader>
+      <CardContent className="flex-1 pb-0">
+        <ActivityGraph data={contributonData} />
+      </CardContent>
+    </Card>
+  )
+}
 export function DashboardPage() {
   return (
-    <div className="flex w-full flex-col">
-      <div className="flex w-full">
-        <ActivityGraph data={contributonData} />
+    <div className="flex w-full flex-col gap-4 p-4">
+      <CardActivityGraph />
+      <div className="flex flex-row gap-4">
         <ChartPieDonutText />
+        <ChartLineLabel />
       </div>
-      <ChartLineLabel />
     </div>
   )
 }
