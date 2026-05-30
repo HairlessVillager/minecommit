@@ -86,7 +86,7 @@ export function ChartLineLabel() {
         <CardDescription>January - June 2024</CardDescription>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={lineChartConfig} className="max-h-62.5">
+        <ChartContainer config={lineChartConfig} className="max-h-62.5 w-full">
           <LineChart
             accessibilityLayer
             data={lineChartData}
