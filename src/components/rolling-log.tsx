@@ -26,9 +26,12 @@ function RollingLogContent({ operation }: { operation: Operation }) {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
+    let cancelled = false
+
     fetch(LOG_FILES[operation])
       .then((res) => res.text())
       .then((text) => {
+        if (cancelled) return
         const allLines = text.split("\n")
         let index = 0
 
@@ -44,6 +47,7 @@ function RollingLogContent({ operation }: { operation: Operation }) {
       })
 
     return () => {
+      cancelled = true
       if (timerRef.current) clearInterval(timerRef.current)
     }
   }, [operation])
