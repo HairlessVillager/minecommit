@@ -15,7 +15,7 @@ use crate::utils::region::{parse_xz, read_region, write_region};
 use nbt::{SectionsDump, restore_chunk, split_chunk};
 
 const FLATTEN_PATTERNS: &[&str] = &["**/region/r.*.*.mca"];
-const UNFLATTEN_PATTERNS: &[&str] = &["**/region/r.*.*.mca/timestamp-header"]; // timestamp-header is sentry
+const UNFLATTEN_PATTERNS: &[&str] = &["**/region/r.*.*.mca/timestamps"]; // timestamps is sentry
 
 pub(crate) struct ChunkRegionHandler;
 
@@ -41,7 +41,17 @@ impl Handler for ChunkRegionHandler {
                     processed.push(key);
                     continue;
                 };
-                storage.put(&format!("{key}/timestamp-header"), &timestamp_header)?;
+                {
+                    let mut header_compound = simdnbt::owned::NbtCompound::new();
+                    header_compound.insert(
+                        "TimestampHeader",
+                        simdnbt::owned::NbtTag::ByteArray(timestamp_header.to_vec()),
+                    );
+                    let header_nbt = simdnbt::owned::BaseNbt::new("", header_compound);
+                    let mut header_buf = Vec::with_capacity(4096 + 100);
+                    header_nbt.write(&mut header_buf);
+                    storage.put(&format!("{key}/timestamps"), &header_buf)?;
+                }
 
                 // Each section carries its own local palette, so chunks can be
                 // processed independently in parallel without a global mapping pass.
@@ -103,14 +113,22 @@ impl Handler for ChunkRegionHandler {
         let mut processed = Vec::new();
         for pattern in UNFLATTEN_PATTERNS {
             for ts_key in storage.glob(pattern)? {
-                log::info!("Process chunk region file (timestamp header) {ts_key}");
-                let Some(region_key) = ts_key.strip_suffix("/timestamp-header") else {
+                log::info!("Process chunk region file (timestamps) {ts_key}");
+                let Some(region_key) = ts_key.strip_suffix("/timestamps") else {
                     continue;
                 };
                 let filename = region_key.split('/').next_back().unwrap_or("");
                 let (region_x, region_z) = parse_xz(filename)
                     .with_context(|| format!("failed to parse region coordinates from {ts_key}"))?;
-                let timestamp_header = storage.get(&ts_key)?;
+                let ts_data = storage.get(&ts_key)?;
+                let ts_nbt = load_nbt(std::io::Cursor::new(&ts_data))
+                    .context("failed to load timestamp header nbt")?;
+                let ts_compound = ts_nbt.as_compound();
+                let timestamp_header: [u8; 4096] = ts_compound
+                    .byte_array("TimestampHeader")
+                    .context("missing 'TimestampHeader' in timestamp nbt")?
+                    .try_into()
+                    .context("timestamp header must be exactly 4096 bytes")?;
 
                 let other_pattern = format!("{region_key}/other/c.*.*.nbt");
 
@@ -173,9 +191,7 @@ impl Handler for ChunkRegionHandler {
                 write_region(
                     region_x,
                     region_z,
-                    &timestamp_header[..4096]
-                        .try_into()
-                        .context("timestamp header must be at least 4096 bytes")?,
+                    &timestamp_header,
                     chunks,
                     Cursor::new(&mut mca_buf),
                 )
