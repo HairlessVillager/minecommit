@@ -4,6 +4,7 @@ mod palette;
 use anyhow::{Context, Result};
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use simdnbt::borrow::read;
+use simdnbt::owned::{BaseNbt, NbtCompound};
 use simdnbt::{Deserialize, Serialize};
 use std::io::Cursor;
 
@@ -46,7 +47,6 @@ impl Handler for ChunkRegionHandler {
                 let mut result = chunks
                     .into_par_iter()
                     .map(|(chunk_x, chunk_z, nbt)| {
-                        let other_size = nbt.len();
                         let nbt =
                             load_nbt(Cursor::new(&nbt)).context("failed to load chunk nbt")?;
                         if nbt
@@ -74,13 +74,13 @@ impl Handler for ChunkRegionHandler {
                             .context("missing 'LastUpdate' field")?;
                         let other = simdnbt::owned::BaseNbt::new(name, other_compound);
 
-                        let other_dump = dump_nbt(sort_nbt(other), other_size)?;
+                        let other = sort_nbt(other);
                         let mut sections_dump = Vec::with_capacity(200 * 1024);
                         sections.to_nbt().write(&mut sections_dump);
                         Ok(Some((
                             chunk_x,
                             chunk_z,
-                            other_dump,
+                            other,
                             sections_dump,
                             inhabited_time,
                             last_update,
@@ -121,21 +121,33 @@ impl Handler for ChunkRegionHandler {
                     storage.put(&format!("{key}/timestamps"), &header_buf)?;
                 }
 
-                // Write objects
+                // Build and write others.nbt (all other NBTs in one compound)
+                {
+                    let mut others_compound = simdnbt::owned::NbtCompound::new();
+                    for (chunk_x, chunk_z, other, _, _, _) in &mut result {
+                        let key_str = format!("c.{}.{}", chunk_x, chunk_z);
+                        others_compound.insert(
+                            key_str,
+                            simdnbt::owned::NbtTag::Compound(
+                                std::mem::replace(other, BaseNbt::default()).as_compound(),
+                            ),
+                        );
+                    }
+                    let others_nbt = simdnbt::owned::BaseNbt::new("", others_compound);
+                    let mut others_buf = Vec::new();
+                    others_nbt.write(&mut others_buf);
+                    storage.put(&format!("{key}/others.nbt"), &others_buf)?;
+                }
+
+                // Write individual sections dumps
                 storage.put_par(
                     result
                         .iter()
-                        .flat_map(|(chunk_x, chunk_z, other, dump, ..)| {
-                            [
-                                (
-                                    format!("{key}/other/c.{chunk_x}.{chunk_z}.nbt"),
-                                    other.as_ref(),
-                                ),
-                                (
-                                    format!("{key}/sections/c.{chunk_x}.{chunk_z}.dump"),
-                                    dump.as_slice(),
-                                ),
-                            ]
+                        .map(|(chunk_x, chunk_z, _, dump, ..)| {
+                            (
+                                format!("{key}/sections/c.{chunk_x}.{chunk_z}.dump"),
+                                dump.as_slice(),
+                            )
                         })
                         .collect::<Vec<_>>(),
                 )?;
@@ -176,37 +188,55 @@ impl Handler for ChunkRegionHandler {
                     .context("missing 'LastUpdate' in timestamp nbt")?
                     .to_vec();
 
-                let other_pattern = format!("{region_key}/other/c.*.*.nbt");
+                // Read others.nbt (all other NBTs in one compound)
+                let others_key = format!("{region_key}/others.nbt");
+                let others_data = storage
+                    .get(&others_key)
+                    .with_context(|| format!("failed to read {others_key}"))?;
+                let others_nbt = load_nbt(std::io::Cursor::new(&others_data))
+                    .context("failed to load others nbt")?;
+                let mut others_compound = others_nbt.as_compound();
 
-                let other_keys: Vec<String> = storage.glob(&other_pattern)?;
-                let coords: Vec<(i32, i32)> = other_keys
-                    .iter()
-                    .map(|k| {
-                        parse_xz(k.split('/').next_back().unwrap_or(""))
-                            .with_context(|| format!("failed to parse (x,z) from {k}"))
+                // Extract coordinates from compound keys
+                let mut coords: Vec<(i32, i32)> = others_compound
+                    .keys()
+                    .filter_map(|key| {
+                        let s = key.to_str();
+                        s.strip_prefix("c.").and_then(|rest| {
+                            let (x_str, z_str) = rest.split_once('.')?;
+                            let x = x_str.parse::<i32>().ok()?;
+                            let z = z_str.parse::<i32>().ok()?;
+                            Some((x, z))
+                        })
                     })
-                    .collect::<Result<_>>()
-                    .context("failed to parse chunk coordinates")?;
+                    .collect();
+                coords.sort_unstable_by(|(x1, z1), (x2, z2)| (z1, x1).cmp(&(z2, x2)));
+
                 let dump_keys: Vec<String> = coords
                     .iter()
                     .map(|(cx, cz)| format!("{region_key}/sections/c.{cx}.{cz}.dump"))
                     .collect();
 
-                let all_keys: Vec<&str> = other_keys
-                    .iter()
-                    .map(|s| s.as_str())
-                    .chain(dump_keys.iter().map(|s| s.as_str()))
-                    .collect();
-                let mut all_data = storage.get_par(&all_keys)?;
-                let dump_data = all_data.split_off(other_keys.len());
-                let nbt_data = all_data;
+                let dump_data =
+                    storage.get_par(&dump_keys.iter().map(|s| s.as_str()).collect::<Vec<_>>())?;
 
-                let mut tasks: Vec<(i32, i32, Vec<u8>, Vec<u8>)> = coords
+                // Build tasks: pair dump data with other data from compound
+                let mut tasks: Vec<(i32, i32, NbtCompound, Vec<u8>)> = coords
                     .into_iter()
-                    .zip(nbt_data)
                     .zip(dump_data)
-                    .map(|(((cx, cz), nbt), dump)| (cx, cz, nbt, dump))
-                    .collect();
+                    .map(|((cx, cz), dump)| {
+                        let coord_key = format!("c.{}.{}", cx, cz);
+                        let other = others_compound
+                            .remove(&coord_key)
+                            .ok_or_else(|| anyhow::anyhow!("missing '{}' in other", coord_key))?
+                            .into_compound()
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("expect '{}' is NBT Compound", coord_key)
+                            })?;
+                        Ok((cx, cz, other, dump))
+                    })
+                    .collect::<Result<Vec<_>>>()
+                    .context("failed to build tasks")?;
 
                 // Sort by (cz, cx) to match flatten order for InhabitedTime/LastUpdate indexing
                 tasks
@@ -218,14 +248,11 @@ impl Handler for ChunkRegionHandler {
                     .map(|(i, (chunk_x, chunk_z, nbt_data, dump_data))| {
                         use simdnbt::borrow::Nbt;
 
-                        let base =
-                            load_nbt(Cursor::new(&nbt_data)).context("failed to load other nbt")?;
                         // Inject InhabitedTime and LastUpdate back into other
-                        let name = base.name().to_owned();
-                        let mut compound = base.as_compound();
+                        let mut compound = nbt_data;
                         compound.insert("InhabitedTime", inhabited_times[i]);
                         compound.insert("LastUpdate", last_updates[i]);
-                        let other = simdnbt::owned::BaseNbt::new(name, compound);
+                        let other = simdnbt::owned::BaseNbt::new("", compound);
 
                         let Nbt::Some(nbt) = read(&mut Cursor::new(dump_data.as_slice()))
                             .context("failed to read sections dump as nbt")?
@@ -257,8 +284,8 @@ impl Handler for ChunkRegionHandler {
                 save.put(region_key, &mca_buf)?;
 
                 processed.push(ts_key.to_owned());
+                processed.push(others_key);
                 processed.extend(dump_keys);
-                processed.extend(other_keys);
             }
         }
         Ok(processed)
