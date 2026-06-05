@@ -11,6 +11,116 @@ const FLATTEN_PATTERNS: &[&str] = &["**/entities/r.*.*.mca"];
 
 const UNFLATTEN_PATTERNS: &[&str] = &["**/entities/r.*.*.mca/timestamp-header"];
 
+/// Promote each entity's `Motion`, `Pos`, `Rotation` fields to top-level
+/// flattened arrays `Motions` (double[n*3]), `Pos` (double[n*3]),
+/// `Rotation` (float[n*2]), and remove them from the individual entities.
+fn promote_entity_fields(nbt: &mut NbtCompound) -> Result<()> {
+    let (motions, positions, rotations) = {
+        let entities = nbt
+            .list("Entities")
+            .and_then(|l| l.compounds())
+            .ok_or_else(|| anyhow::anyhow!("'Entities' list not found in chunk"))?;
+        let n = entities.len();
+        let mut motions = Vec::with_capacity(n * 3);
+        let mut positions = Vec::with_capacity(n * 3);
+        let mut rotations = Vec::with_capacity(n * 2);
+        for (i, entity) in entities.iter().enumerate() {
+            let m = entity
+                .list("Motion")
+                .and_then(|l| l.doubles())
+                .ok_or_else(|| anyhow::anyhow!("'Entities.{i}' missing Motion field"))?;
+            anyhow::ensure!(m.len() == 3, "'Entities.{i}.Motion' length is not 3");
+            motions.extend(m);
+            let p = entity
+                .list("Pos")
+                .and_then(|l| l.doubles())
+                .ok_or_else(|| anyhow::anyhow!("Entity missing Pos field"))?;
+            anyhow::ensure!(p.len() == 3, "'Entities.{i}.Pos' length is not 3");
+            positions.extend(p);
+            let r = entity
+                .list("Rotation")
+                .and_then(|l| l.floats())
+                .ok_or_else(|| anyhow::anyhow!("Entity missing Rotation field"))?;
+            anyhow::ensure!(r.len() == 2, "'Entities.{i}.Rotation' length is not 2");
+            rotations.extend(r);
+        }
+        (motions, positions, rotations)
+    };
+    // Remove original fields from each entity
+    if let Some(NbtList::Compound(entities)) = nbt.list_mut("Entities") {
+        for entity in entities {
+            entity.remove("Motion");
+            entity.remove("Pos");
+            entity.remove("Rotation");
+        }
+    }
+    // Insert flattened arrays at top level
+    nbt.insert("Motions", NbtTag::List(NbtList::Double(motions)));
+    nbt.insert("Pos", NbtTag::List(NbtList::Double(positions)));
+    nbt.insert("Rotation", NbtTag::List(NbtList::Float(rotations)));
+    Ok(())
+}
+
+/// Reverse of `promote_entity_fields`: take top-level `Motions`, `Pos`,
+/// `Rotation` flattened arrays and redistribute them back into each entity's
+/// `Motion` (double[3]), `Pos` (double[3]), `Rotation` (float[2]) fields,
+/// and remove the flattened arrays from the top level.
+/// If the flattened fields are absent (e.g. data was not promoted by an older
+/// version), this is a no-op.
+fn demote_entity_fields(nbt: &mut NbtCompound) -> Result<()> {
+    // Check if promoted fields exist; if not, nothing to do
+    let (motions, positions, rotations) = match (
+        nbt.remove("Motions")
+            .and_then(|t| t.into_list())
+            .and_then(|l| l.into_doubles()),
+        nbt.remove("Pos")
+            .and_then(|t| t.into_list())
+            .and_then(|l| l.into_doubles()),
+        nbt.remove("Rotation")
+            .and_then(|t| t.into_list())
+            .and_then(|l| l.into_floats()),
+    ) {
+        (Some(m), Some(p), Some(r)) => (m, p, r),
+        _ => return Ok(()),
+    };
+
+    let entities = match nbt.list_mut("Entities") {
+        Some(NbtList::Compound(compounds)) => compounds,
+        _ => return Err(anyhow::anyhow!("Entities list not found in chunk")),
+    };
+
+    let n = entities.len();
+    anyhow::ensure!(
+        motions.len() == n * 3,
+        "Motions length {} does not match {} entities * 3",
+        motions.len(),
+        n
+    );
+    anyhow::ensure!(
+        positions.len() == n * 3,
+        "Pos length {} does not match {} entities * 3",
+        positions.len(),
+        n
+    );
+    anyhow::ensure!(
+        rotations.len() == n * 2,
+        "Rotation length {} does not match {} entities * 2",
+        rotations.len(),
+        n
+    );
+
+    for (i, entity) in entities.iter_mut().enumerate() {
+        let m = Vec::from(&motions[i * 3..i * 3 + 3]);
+        entity.insert("Motion", NbtTag::List(NbtList::Double(m)));
+        let p = Vec::from(&positions[i * 3..i * 3 + 3]);
+        entity.insert("Pos", NbtTag::List(NbtList::Double(p)));
+        let r = Vec::from(&rotations[i * 2..i * 2 + 2]);
+        entity.insert("Rotation", NbtTag::List(NbtList::Float(r)));
+    }
+
+    Ok(())
+}
+
 /// Sort the `attributes` list within each entity in the `Entities` field by the `id` string field.
 /// Called after `sort_nbt` (which handles key ordering and general recursion), so this function
 /// does NOT re-sort keys.
@@ -60,6 +170,7 @@ impl Handler for EntitiesRegionHandler {
                         let mut nbt = load_nbt(Cursor::new(&raw_bytes))
                             .context("failed to load chunk nbt")?
                             .as_compound();
+                        promote_entity_fields(&mut nbt)?;
                         sort_entity_attributes_by_id(&mut nbt);
                         Ok((chunk_x, chunk_z, nbt))
                     })
@@ -136,9 +247,10 @@ impl Handler for EntitiesRegionHandler {
                     let nbt_tag = entities_compound
                         .remove(&key_str)
                         .ok_or_else(|| anyhow::anyhow!("missing '{}' in entities nbt", key_str))?;
-                    let nbt_compound = nbt_tag
+                    let mut nbt_compound = nbt_tag
                         .into_compound()
                         .ok_or_else(|| anyhow::anyhow!("expect '{}' is NBT Compound", key_str))?;
+                    demote_entity_fields(&mut nbt_compound)?;
                     let mut buf = Vec::new();
                     simdnbt::owned::BaseNbt::new("", nbt_compound).write(&mut buf);
                     chunks.push((chunk_x, chunk_z, buf));
