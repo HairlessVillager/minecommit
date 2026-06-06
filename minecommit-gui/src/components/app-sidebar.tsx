@@ -13,14 +13,17 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
   ChevronDown,
   HardDrive,
   // History,
   House,
+  Plus,
   // LayoutDashboard,
   Settings,
 } from "lucide-react"
@@ -53,16 +56,19 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 }
               />
-              <DropdownMenuContent className="w-[--radix-popper-anchor-width]">
-                <DropdownMenuItem>
-                  <span>存档 1</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <span>存档 2</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <span>存档 3</span>
-                </DropdownMenuItem>
+              <DropdownMenuContent className="w-40" align="start">
+                <DropdownMenuGroup>
+                  <DropdownMenuItem>
+                    <Plus />
+                    新建
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem>世界 1</DropdownMenuItem>
+                  <DropdownMenuItem>世界 2</DropdownMenuItem>
+                  <DropdownMenuItem>世界 3</DropdownMenuItem>
+                </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
           </SidebarMenuItem>
