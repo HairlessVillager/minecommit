@@ -118,9 +118,11 @@ fn derive_save_info(path: String) -> Result<DeriveSaveInfo, AppError> {
 
     let name = match parts.as_slice() {
         [.., launcher, ".minecraft", "versions", version, "saves", save_name] => {
-            format!("{launcher} / {version} / {save_name}")
+            format!("{} / {version} / {save_name}", launcher.to_uppercase())
         }
-        [.., launcher, ".minecraft", "saves", save_name] => format!("{launcher} / {save_name}"),
+        [.., launcher, ".minecraft", "saves", save_name] => {
+            format!("{} / {save_name}", launcher.to_uppercase())
+        }
         [.., "saves", save_name] => save_name.to_string(),
         _ => {
             return Err(AppError::InvalidUTF8(format!(

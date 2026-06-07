@@ -123,7 +123,7 @@ function AddTrackDialog({
         // Derive fields via backend
         const info = await invoke<{ name: string; repo_path: string }>(
           "derive_save_info",
-          { path: selected },
+          { path: selected }
         )
         setName(info.name)
         setPath(selected)
@@ -318,7 +318,7 @@ export function SaveManagePage() {
 
   return (
     <div className="flex w-full flex-col gap-4 p-4">
-      <Card>
+      <Card className="h-full">
         <CardHeader>
           <div className="flex items-end justify-between">
             <div>
@@ -337,16 +337,16 @@ export function SaveManagePage() {
           ) : saves.length === 0 ? (
             <EmptySave onAddTrack={() => setDialogOpen(true)} />
           ) : (
-            <Table>
+            <Table className="table-fixed">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-muted-foreground">
+                  <TableHead className="w-2/5 text-muted-foreground">
                     存档名称
                   </TableHead>
-                  <TableHead className="text-muted-foreground">
+                  <TableHead className="w-2/5 text-muted-foreground">
                     存档路径
                   </TableHead>
-                  <TableHead>
+                  <TableHead className="w-18">
                     <span className="sr-only">操作</span>
                   </TableHead>
                 </TableRow>
@@ -355,8 +355,12 @@ export function SaveManagePage() {
                 {saves.map((save) => (
                   <HoverCard key={save.name}>
                     <HoverCardTrigger render={<TableRow />}>
-                      <TableCell className="">{save.name}</TableCell>
-                      <TableCell>{save.path}</TableCell>
+                      <TableCell className="max-w-0 truncate text-left [direction:rtl]">
+                        {save.name}
+                      </TableCell>
+                      <TableCell className="max-w-0 truncate text-left [direction:rtl]">
+                        {save.path}
+                      </TableCell>
                       <TableCell className="text-right">
                         <Button
                           variant="ghost"
@@ -371,40 +375,26 @@ export function SaveManagePage() {
                         </Button>
                       </TableCell>
                     </HoverCardTrigger>
-                    <HoverCardContent align="start" className="w-auto">
-                      <div className="flex flex-col gap-3">
+                    <HoverCardContent align="start" className="w-auto text-xs">
+                      <div className="flex flex-col gap-2">
                         <div>
-                          <p className="text-xs text-muted-foreground">
-                            存档名称
-                          </p>
-                          <p className="font-medium">{save.name}</p>
+                          <p className="text-muted-foreground">存档名称</p>
+                          <p className="break-all">{save.name}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground">
-                            存档路径
-                          </p>
-                          <p className="font-mono text-xs break-all">
-                            {save.path}
-                          </p>
+                          <p className="text-muted-foreground">存档路径</p>
+                          <p className="break-all">{save.path}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground">
-                            仓库路径
-                          </p>
-                          <p className="font-mono text-xs break-all">
-                            {save.repo_path}
-                          </p>
+                          <p className="text-muted-foreground">仓库路径</p>
+                          <p className="break-">{save.repo_path}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground">
-                            远程仓库路径
-                          </p>
+                          <p className="text-muted-foreground">远程仓库路径</p>
                           {save.remote_repo_path ? (
-                            <p className="font-mono text-xs break-all">
-                              {save.remote_repo_path}
-                            </p>
+                            <p className="break-all">{save.remote_repo_path}</p>
                           ) : (
-                            <p className="font-mono text-xs break-all text-muted-foreground">
+                            <p className="break-all text-muted-foreground">
                               {"（未设置）"}
                             </p>
                           )}
