@@ -43,6 +43,7 @@ pub struct Save {
     pub repo_path: String,
     pub remote_repo_path: String,
     pub last_access: String,
+    pub default_branch: String,
 }
 
 #[tauri::command]
@@ -121,6 +122,7 @@ fn add_save(
     path: String,
     repo_path: String,
     remote_repo_path: String,
+    default_branch: String,
 ) -> Result<Save, AppError> {
     let mut saves = state.saves.lock().unwrap();
 
@@ -135,6 +137,7 @@ fn add_save(
         repo_path,
         remote_repo_path,
         last_access: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+        default_branch,
     };
     saves.push(save.clone());
     save_saves(&state.data_dir, &saves)?;
@@ -151,6 +154,44 @@ fn access_save(state: tauri::State<SaveState>, name: String) -> Result<(), AppEr
     save.last_access = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     save_saves(&state.data_dir, &saves)?;
     Ok(())
+}
+
+#[tauri::command]
+fn list_branches(repo_path: String) -> Result<Vec<String>, String> {
+    let output = Command::new("git")
+        .args(["--git-dir", &repo_path, "branch", "--format=%(refname:short)"])
+        .output()
+        .map_err(|e| format!("Failed to list branches: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Failed to list branches: {}", stderr));
+    }
+
+    let branches: Vec<String> = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    Ok(branches)
+}
+
+#[tauri::command]
+fn get_head_ref(repo_path: String) -> Result<String, String> {
+    let head_path = Path::new(&repo_path).join("HEAD");
+    let content = fs::read_to_string(&head_path)
+        .map_err(|e| format!("Failed to read HEAD file: {}", e))?;
+
+    // HEAD file content is like "ref: refs/heads/main\n"
+    let trimmed = content.trim();
+    const PREFIX: &str = "ref: refs/heads/";
+    if let Some(branch) = trimmed.strip_prefix(PREFIX) {
+        Ok(branch.to_string())
+    } else {
+        // Detached HEAD — fall back to "main"
+        Ok("main".to_string())
+    }
 }
 
 #[tauri::command]
@@ -262,6 +303,8 @@ pub fn run() {
             access_save,
             check_repo_exists,
             init_bare_repo,
+            list_branches,
+            get_head_ref,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

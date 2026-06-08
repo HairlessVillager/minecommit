@@ -33,6 +33,13 @@ import {
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useState } from "react"
 import { Trash2, HardDrive, FolderOpen } from "lucide-react"
 import { invoke } from "@tauri-apps/api/core"
@@ -60,7 +67,7 @@ function EmptySave({ onAddTrack }: { onAddTrack: () => void }) {
   )
 }
 
-type AddTrackStep = "select" | "confirm" | "init"
+type AddTrackStep = "select" | "confirm" | "select-branch" | "init"
 
 function AddTrackDialog({
   open,
@@ -82,6 +89,8 @@ function AddTrackDialog({
   const [submitting, setSubmitting] = useState(false)
   const [initializing, setInitializing] = useState(false)
   const [selecting, setSelecting] = useState(false)
+  const [branches, setBranches] = useState<string[]>([])
+  const [defaultBranch, setDefaultBranch] = useState("")
 
   function resetAll() {
     setStep("select")
@@ -92,6 +101,8 @@ function AddTrackDialog({
     setError("")
     setSubmitting(false)
     setSelecting(false)
+    setBranches([])
+    setDefaultBranch("")
   }
 
   function handleOpenChange(open: boolean) {
@@ -144,15 +155,32 @@ function AddTrackDialog({
         setStep("init")
         return
       }
-      await invoke("add_save", {
-        name,
-        path,
+      // Repo exists — fetch branches and let user select one
+      setSubmitting(false)
+      const branchList = await invoke<string[]>("list_branches", {
         repoPath: localRepoPath,
-        remoteRepoPath,
       })
-      onOpenChange(false)
-      resetAll()
-      onSaveAdded()
+      setBranches(branchList)
+      if (branchList.length === 0) {
+        // No commits yet — read HEAD ref to determine the default branch
+        const headRef = await invoke<string>("get_head_ref", {
+          repoPath: localRepoPath,
+        })
+        await invoke("add_save", {
+          name,
+          path,
+          repoPath: localRepoPath,
+          remoteRepoPath,
+          defaultBranch: headRef,
+        })
+        onOpenChange(false)
+        resetAll()
+        onSaveAdded()
+        return
+      }
+      // Pick first branch as default if available
+      setDefaultBranch(branchList[0])
+      setStep("select-branch")
     } catch (err) {
       setError(String(err))
       setSubmitting(false)
@@ -171,6 +199,7 @@ function AddTrackDialog({
         path,
         repoPath: localRepoPath,
         remoteRepoPath,
+        defaultBranch: branchName,
       })
       onOpenChange(false)
       resetAll()
@@ -180,6 +209,26 @@ function AddTrackDialog({
       setStep("confirm")
     } finally {
       setInitializing(false)
+    }
+  }
+
+  async function handleBranchConfirm() {
+    setSubmitting(true)
+    try {
+      await invoke("add_save", {
+        name,
+        path,
+        repoPath: localRepoPath,
+        remoteRepoPath,
+        defaultBranch,
+      })
+      onOpenChange(false)
+      resetAll()
+      onSaveAdded()
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -288,6 +337,49 @@ function AddTrackDialog({
               </Button>
             </DialogFooter>
           </form>
+        )}
+
+        {step === "select-branch" && (
+          <>
+            <DialogHeader>
+              <DialogTitle>选择默认分支</DialogTitle>
+              <DialogDescription>
+                该存档关联的仓库已存在，请选择一个分支作为默认分支
+              </DialogDescription>
+            </DialogHeader>
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="select-branch">默认分支</FieldLabel>
+                <Select
+                  value={defaultBranch}
+                  onValueChange={(v) => setDefaultBranch(v ?? "")}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="请选择一个分支" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map((branch) => (
+                      <SelectItem key={branch} value={branch}>
+                        {branch}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </FieldGroup>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setStep("confirm")}>
+                返回
+              </Button>
+              <Button
+                disabled={submitting || !defaultBranch}
+                onClick={handleBranchConfirm}
+              >
+                {submitting ? "添加中…" : "确认跟踪"}
+              </Button>
+            </DialogFooter>
+          </>
         )}
 
         {step === "init" && (
@@ -445,6 +537,12 @@ export function SaveManagePage() {
                               {"（未设置）"}
                             </p>
                           )}
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">默认分支</p>
+                          <p className="break-all">
+                            {save.default_branch || "—"}
+                          </p>
                         </div>
                       </div>
                     </HoverCardContent>

@@ -6,6 +6,7 @@ export interface Save {
   repo_path: string
   remote_repo_path: string
   last_access: string
+  default_branch: string
 }
 
 export interface SavesContextValue {
