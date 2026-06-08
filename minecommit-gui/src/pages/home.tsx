@@ -7,6 +7,7 @@ import {
   HardDriveUpload,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useSaves } from "@/contexts/saves"
 import {
   Dialog,
   DialogClose,
@@ -263,6 +264,7 @@ function PullDialog({
 }
 
 export function HomePage() {
+  const { selectedSave } = useSaves()
   const [commitDialogOpen, setCommitDialogOpen] = useState(false)
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false)
   const [pushDialogOpen, setPushDialogOpen] = useState(false)
@@ -300,8 +302,13 @@ export function HomePage() {
   ]
 
   return (
-    <div className="flex w-full items-center justify-center">
+    <div className="flex w-full flex-col items-center justify-center gap-4">
       <Dock items={items} />
+      {selectedSave && (
+        <p className="text-sm text-muted-foreground">
+          {selectedSave.name} / {selectedSave.path}
+        </p>
+      )}
       <CommitDialog
         open={commitDialogOpen}
         onOpenChange={setCommitDialogOpen}

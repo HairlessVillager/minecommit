@@ -12,6 +12,8 @@ export interface SavesContextValue {
   saves: Save[]
   loaded: boolean
   refreshSaves: () => Promise<void>
+  selectedSave: Save | null
+  setSelectedSave: (save: Save | null) => void
 }
 
 export const SavesContext = createContext<SavesContextValue | null>(null)

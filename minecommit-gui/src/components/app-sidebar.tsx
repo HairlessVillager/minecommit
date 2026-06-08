@@ -39,7 +39,7 @@ const navItems = allItems.slice(0, -1)
 
 export function AppSidebar() {
   const navigate = useNavigate()
-  const { saves } = useSaves()
+  const { saves, selectedSave, setSelectedSave } = useSaves()
 
   return (
     <Sidebar collapsible="icon">
@@ -51,7 +51,7 @@ export function AppSidebar() {
                 render={
                   <SidebarMenuButton>
                     <HardDrive />
-                    选择存档
+                    {selectedSave ? selectedSave.name : "选择存档"}
                     <ChevronDown className="ml-auto" />
                   </SidebarMenuButton>
                 }
@@ -70,7 +70,10 @@ export function AppSidebar() {
                     <DropdownMenuItem disabled>暂无存档</DropdownMenuItem>
                   ) : (
                     saves.map((save) => (
-                      <DropdownMenuItem key={save.name}>
+                      <DropdownMenuItem
+                        key={save.name}
+                        onClick={() => setSelectedSave(save)}
+                      >
                         <HardDrive />
                         {save.name}
                       </DropdownMenuItem>

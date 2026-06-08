@@ -5,6 +5,7 @@ import { SavesContext, type Save } from "./saves"
 export function SavesProvider({ children }: { children: ReactNode }) {
   const [saves, setSaves] = useState<Save[]>([])
   const [loaded, setLoaded] = useState(false)
+  const [selectedSave, setSelectedSave] = useState<Save | null>(null)
 
   const refreshSaves = useCallback(async () => {
     try {
@@ -33,7 +34,7 @@ export function SavesProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <SavesContext.Provider value={{ saves, loaded, refreshSaves }}>
+    <SavesContext.Provider value={{ saves, loaded, refreshSaves, selectedSave, setSelectedSave }}>
       {children}
     </SavesContext.Provider>
   )
