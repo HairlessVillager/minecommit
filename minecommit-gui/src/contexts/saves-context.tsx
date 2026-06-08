@@ -22,7 +22,16 @@ export function SavesProvider({ children }: { children: ReactNode }) {
     let ignore = false
     invoke<Save[]>("list_saves")
       .then((data) => {
-        if (!ignore) setSaves(data)
+        if (!ignore) {
+          setSaves(data)
+          // Auto select latest access save
+          if (data.length > 0) {
+            const sorted = [...data].sort((a, b) =>
+              b.last_access.localeCompare(a.last_access)
+            )
+            setSelectedSave(sorted[0])
+          }
+        }
       })
       .catch(() => {})
       .finally(() => {
@@ -34,7 +43,9 @@ export function SavesProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <SavesContext.Provider value={{ saves, loaded, refreshSaves, selectedSave, setSelectedSave }}>
+    <SavesContext.Provider
+      value={{ saves, loaded, refreshSaves, selectedSave, setSelectedSave }}
+    >
       {children}
     </SavesContext.Provider>
   )
