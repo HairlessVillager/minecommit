@@ -46,6 +46,21 @@ pub struct Save {
     pub default_branch: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommitAuthor {
+    pub name: String,
+    pub email: String,
+}
+
+impl Default for CommitAuthor {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            email: String::new(),
+        }
+    }
+}
+
 #[tauri::command]
 fn check_repo_exists(repo_path: String) -> Result<bool, String> {
     let output = Command::new("git")
@@ -81,13 +96,18 @@ fn init_bare_repo(repo_path: String, default_branch: String) -> Result<(), Strin
     }
 }
 
-struct SaveState {
+struct AppState {
     saves: Mutex<Vec<Save>>,
+    commit_author: Mutex<CommitAuthor>,
     data_dir: PathBuf,
 }
 
 fn saves_file_path(data_dir: &PathBuf) -> PathBuf {
     data_dir.join("saves.json")
+}
+
+fn commit_author_file_path(data_dir: &PathBuf) -> PathBuf {
+    data_dir.join("commit_author.json")
 }
 
 fn load_saves(data_dir: &PathBuf) -> Result<Vec<Save>, AppError> {
@@ -110,14 +130,51 @@ fn save_saves(data_dir: &PathBuf, saves: &[Save]) -> Result<(), AppError> {
     Ok(())
 }
 
+fn load_commit_author(data_dir: &PathBuf) -> CommitAuthor {
+    let path = commit_author_file_path(data_dir);
+    if path.exists() {
+        fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
+    } else {
+        CommitAuthor::default()
+    }
+}
+
+fn save_commit_author(data_dir: &PathBuf, author: &CommitAuthor) -> Result<(), AppError> {
+    let path = commit_author_file_path(data_dir);
+    fs::create_dir_all(data_dir)?;
+    let content = serde_json::to_string_pretty(author)?;
+    fs::write(&path, content)?;
+    Ok(())
+}
+
 #[tauri::command]
-fn list_saves(state: tauri::State<SaveState>) -> Vec<Save> {
+fn list_saves(state: tauri::State<AppState>) -> Vec<Save> {
     state.saves.lock().unwrap().clone()
 }
 
 #[tauri::command]
+fn get_commit_author(state: tauri::State<AppState>) -> CommitAuthor {
+    state.commit_author.lock().unwrap().clone()
+}
+
+#[tauri::command]
+fn set_commit_author(
+    state: tauri::State<AppState>,
+    name: String,
+    email: String,
+) -> Result<CommitAuthor, AppError> {
+    let author = CommitAuthor { name, email };
+    save_commit_author(&state.data_dir, &author)?;
+    *state.commit_author.lock().unwrap() = author.clone();
+    Ok(author)
+}
+
+#[tauri::command]
 fn add_save(
-    state: tauri::State<SaveState>,
+    state: tauri::State<AppState>,
     name: String,
     path: String,
     repo_path: String,
@@ -145,7 +202,7 @@ fn add_save(
 }
 
 #[tauri::command]
-fn access_save(state: tauri::State<SaveState>, name: String) -> Result<(), AppError> {
+fn access_save(state: tauri::State<AppState>, name: String) -> Result<(), AppError> {
     let mut saves = state.saves.lock().unwrap();
     let save = saves
         .iter_mut()
@@ -249,7 +306,7 @@ fn derive_save_info(path: String) -> Result<DeriveSaveInfo, AppError> {
 
 #[tauri::command]
 fn delete_save(
-    state: tauri::State<SaveState>,
+    state: tauri::State<AppState>,
     name: String,
     delete_repo: bool,
 ) -> Result<(), AppError> {
@@ -287,9 +344,11 @@ pub fn run() {
                 .expect("failed to resolve app data dir");
 
             let saves = load_saves(&data_dir)?;
+            let commit_author = load_commit_author(&data_dir);
 
-            app.manage(SaveState {
+            app.manage(AppState {
                 saves: Mutex::new(saves),
+                commit_author: Mutex::new(commit_author),
                 data_dir,
             });
 
@@ -305,6 +364,8 @@ pub fn run() {
             init_bare_repo,
             list_branches,
             get_head_ref,
+            get_commit_author,
+            set_commit_author,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

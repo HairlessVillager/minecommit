@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useCommitAuthor } from "@/contexts/commit-author"
 import { Dock } from "@/components/unlumen-ui/dock"
 import {
   CloudDownload,
@@ -40,6 +41,8 @@ function CommitDialog({
   onOpenChange: (open: boolean) => void
   onSubmit: () => void
 }) {
+  const { author } = useCommitAuthor()
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -59,7 +62,12 @@ function CommitDialog({
           </Field>
           <Field>
             <Label htmlFor="name">你的游戏昵称</Label>
-            <Input id="name" name="name" placeholder="例如：HairlessVillager" />
+            <Input
+              id="name"
+              name="name"
+              placeholder="例如：HairlessVillager"
+              defaultValue={author.name || undefined}
+            />
           </Field>
           <Field>
             <Label htmlFor="email">联系邮箱</Label>
@@ -68,6 +76,7 @@ function CommitDialog({
               name="email"
               type="email"
               placeholder="例如：hairlessvilager@foxmail.com"
+              defaultValue={author.email || undefined}
             />
           </Field>
         </FieldGroup>
