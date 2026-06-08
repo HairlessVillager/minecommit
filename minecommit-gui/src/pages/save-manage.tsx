@@ -526,7 +526,7 @@ export function SaveManagePage() {
                         </div>
                         <div>
                           <p className="text-muted-foreground">仓库路径</p>
-                          <p className="break-">{save.repo_path}</p>
+                          <p className="break-all">{save.repo_path}</p>
                         </div>
                         <div>
                           <p className="text-muted-foreground">远程仓库路径</p>
