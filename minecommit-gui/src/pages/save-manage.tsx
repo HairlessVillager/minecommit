@@ -91,6 +91,7 @@ function AddTrackDialog({
   const [selecting, setSelecting] = useState(false)
   const [branches, setBranches] = useState<string[]>([])
   const [defaultBranch, setDefaultBranch] = useState("")
+  const [initBranch, setInitBranch] = useState("main")
 
   function resetAll() {
     setStep("select")
@@ -103,6 +104,7 @@ function AddTrackDialog({
     setSelecting(false)
     setBranches([])
     setDefaultBranch("")
+    setInitBranch("main")
   }
 
   function handleOpenChange(open: boolean) {
@@ -396,7 +398,8 @@ function AddTrackDialog({
                 <Input
                   id="init-branch"
                   placeholder="main"
-                  defaultValue="main"
+                  value={initBranch}
+                  onChange={(e) => setInitBranch(e.target.value)}
                 />
               </Field>
             </FieldGroup>
@@ -408,14 +411,11 @@ function AddTrackDialog({
               <Button
                 disabled={initializing}
                 onClick={() => {
-                  const input = document.getElementById(
-                    "init-branch"
-                  ) as HTMLInputElement
-                  if (!input.value.trim()) {
+                  if (!initBranch.trim()) {
                     setError("分支名不能为空")
                     return
                   }
-                  handleInitComplete(input.value.trim())
+                  handleInitComplete(initBranch.trim())
                 }}
               >
                 {initializing ? "初始化中…" : "初始化仓库"}

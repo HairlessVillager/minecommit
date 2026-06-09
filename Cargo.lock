@@ -3440,7 +3440,10 @@ dependencies = [
 name = "minecommit-gui"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "chrono",
+ "log",
+ "minecommit",
  "serde",
  "serde_json",
  "tauri",

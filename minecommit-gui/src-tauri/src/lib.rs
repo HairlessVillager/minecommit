@@ -1,10 +1,15 @@
 use chrono::Local;
+use log::{LevelFilter, Log, Metadata, Record};
+use minecommit::{
+    utils::cmd::{git_cmd, git_count_objects, git_repack},
+    Config,
+};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -47,17 +52,210 @@ pub struct Save {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct CommitAuthor {
     pub name: String,
     pub email: String,
 }
 
-impl Default for CommitAuthor {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            email: String::new(),
+// ─── Logger for capturing commit logs ───────────────────────────────────────
+
+static LOGGER: CaptureLogger = CaptureLogger { lines: Mutex::new(Vec::new()) };
+
+struct CaptureLogger {
+    lines: Mutex<Vec<String>>,
+}
+
+impl Log for CaptureLogger {
+    fn enabled(&self, _: &Metadata) -> bool {
+        true
+    }
+
+    fn log(&self, record: &Record) {
+        if let Ok(mut lines) = self.lines.lock() {
+            let line = format!("{} {}", record.level(), record.args());
+            lines.push(line);
         }
+    }
+
+    fn flush(&self) {}
+}
+
+fn init_logger() {
+    // Safe to call multiple times; only the first call takes effect.
+    let _ = log::set_logger(&LOGGER);
+    log::set_max_level(LevelFilter::Info);
+}
+
+fn take_logs() -> Vec<String> {
+    LOGGER.lines.lock().unwrap_or_else(|e| e.into_inner()).drain(..).collect()
+}
+
+// ─── Tauri commands ─────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PerformCommitResult {
+    pub success: bool,
+    pub logs: Vec<String>,
+    pub error: Option<String>,
+    pub size_before_mib: Option<f64>,
+    pub size_after_mib: Option<f64>,
+    pub size_change_pct: Option<f64>,
+}
+
+#[allow(clippy::too_many_arguments)]
+#[tauri::command]
+async fn perform_commit(
+    app: tauri::AppHandle,
+    save_dir: String,
+    git_dir: String,
+    branch: String,
+    message: String,
+    extra_patterns: Vec<String>,
+    ignore_patterns: Vec<String>,
+    use_repack: bool,
+) -> PerformCommitResult {
+    init_logger();
+    take_logs(); // drain stale logs from previous calls
+
+    let emit = |line: &str| {
+        if let Err(e) = app.emit("commit-log", line) {
+            eprintln!("failed to emit commit-log event: {e}");
+        }
+    };
+
+    let capture = |lines: &[String]| {
+        for line in lines {
+            emit(line);
+        }
+    };
+
+    // 1. Resolve parents: auto-detect if it's the first commit on this branch
+    let parents = {
+        match git_cmd(&git_dir, ["rev-parse", &format!("{branch}^{{{{commit}}}}")]).output() {
+            Ok(out) if out.status.success() => {
+                let hash = String::from_utf8(out.stdout).unwrap_or_default().trim().to_owned();
+                log::info!("Branch '{branch}' exists at {hash}, creating child commit");
+                vec![hash]
+            }
+            // If the branch has no commits yet, create a root commit (init)
+            _ => {
+                log::info!("Branch '{branch}' has no commits yet, creating initial commit");
+                vec![]
+            }
+        }
+    };
+    let r#ref = format!("refs/heads/{}", &branch);
+
+    // 2. Count objects before
+    let size_before = match git_count_objects(&git_dir) {
+        Ok(s) => {
+            let v = s.total_size_mib();
+            log::info!("Repo size before: {v:.3} MiB");
+            v
+        }
+        Err(e) => {
+            log::warn!("Failed to count git objects: {e}");
+            f64::NAN
+        }
+    };
+
+    // 3. Run the commit
+    let unprocessed = match Config::new(
+        PathBuf::from(&save_dir),
+        PathBuf::from(&git_dir),
+        extra_patterns,
+        ignore_patterns,
+    )
+    .commit(parents, &message, Some(r#ref))
+    {
+        Ok(u) => u,
+        Err(e) => {
+            let msg = format!("{e:#}");
+            log::error!("{msg}");
+            let logs = take_logs();
+            capture(&logs);
+            return PerformCommitResult {
+                success: false,
+                logs,
+                error: Some(msg),
+                size_before_mib: Some(size_before),
+                size_after_mib: None,
+                size_change_pct: None,
+            };
+        }
+    };
+
+    // 4. Check for unprocessed files
+    if !unprocessed.is_empty() {
+        for item in &unprocessed {
+            log::error!("Skipped file: {item}");
+        }
+        let msg = format!(
+            "Skipped {} files because they are not caught by any handler. Catch them via -p or ignore them via -i.",
+            unprocessed.len()
+        );
+        log::error!("{msg}");
+        let logs = take_logs();
+        capture(&logs);
+        return PerformCommitResult {
+            success: false,
+            logs,
+            error: Some(msg),
+            size_before_mib: Some(size_before),
+            size_after_mib: None,
+            size_change_pct: None,
+        };
+    }
+
+    // 5. Optional repack
+    if use_repack {
+        if let Err(e) = git_repack(&git_dir) {
+            log::warn!("Repack failed: {e}");
+        }
+    } else {
+        log::warn!("--repack is not enabled, Git repository can get bloated");
+    }
+
+    // 6. Count objects after
+    let size_after = match git_count_objects(&git_dir) {
+        Ok(s) => {
+            let v = s.total_size_mib();
+            log::info!("Repo size after: {v:.3} MiB");
+            v
+        }
+        Err(e) => {
+            log::warn!("Failed to count git objects: {e}");
+            f64::NAN
+        }
+    };
+
+    let size_change_pct = if size_before.is_finite() && size_before > 0.0 {
+        Some((size_after - size_before) / size_before * 100.0)
+    } else {
+        None
+    };
+
+    if let Some(pct) = size_change_pct {
+        let sign = if pct >= 0.0 { '+' } else { '-' };
+        log::info!(
+            "Done. Total size: {size_after:.3} MiB ({sign}{pct:.4}% from {size_before:.3} MiB)"
+        );
+    } else {
+        log::info!("Done. Total size: {size_after:.3} MiB");
+    }
+
+    let logs = take_logs();
+    capture(&logs);
+    let _ = app.emit("commit-finished", ());
+
+    PerformCommitResult {
+        success: true,
+        logs,
+        error: None,
+        size_before_mib: Some(size_before),
+        size_after_mib: Some(size_after),
+        size_change_pct,
     }
 }
 
@@ -102,11 +300,11 @@ struct AppState {
     data_dir: PathBuf,
 }
 
-fn saves_file_path(data_dir: &PathBuf) -> PathBuf {
+fn saves_file_path(data_dir: &Path) -> PathBuf {
     data_dir.join("saves.json")
 }
 
-fn commit_author_file_path(data_dir: &PathBuf) -> PathBuf {
+fn commit_author_file_path(data_dir: &Path) -> PathBuf {
     data_dir.join("commit_author.json")
 }
 
@@ -130,7 +328,7 @@ fn save_saves(data_dir: &PathBuf, saves: &[Save]) -> Result<(), AppError> {
     Ok(())
 }
 
-fn load_commit_author(data_dir: &PathBuf) -> CommitAuthor {
+fn load_commit_author(data_dir: &Path) -> CommitAuthor {
     let path = commit_author_file_path(data_dir);
     if path.exists() {
         fs::read_to_string(&path)
@@ -207,7 +405,7 @@ fn access_save(state: tauri::State<AppState>, name: String) -> Result<(), AppErr
     let save = saves
         .iter_mut()
         .find(|s| s.name == name)
-        .ok_or_else(|| AppError::SaveNotFound(name))?;
+        .ok_or(AppError::SaveNotFound(name))?;
     save.last_access = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     save_saves(&state.data_dir, &saves)?;
     Ok(())
@@ -366,6 +564,7 @@ pub fn run() {
             get_head_ref,
             get_commit_author,
             set_commit_author,
+            perform_commit,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

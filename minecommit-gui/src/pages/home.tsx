@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { useCallback, useState } from "react"
+import { invoke } from "@tauri-apps/api/core"
 import { useCommitAuthor } from "@/contexts/commit-author"
 import { Dock } from "@/components/unlumen-ui/dock"
 import {
@@ -32,16 +33,83 @@ import {
 } from "@/components/ui/select"
 import { RollingLogDialog, type Operation } from "@/components/rolling-log"
 
+interface CommitResult {
+  success: boolean
+  logs: string[]
+  error: string | null
+  size_before_mib: number | null
+  size_after_mib: number | null
+  size_change_pct: number | null
+}
+
 function CommitDialog({
   open,
   onOpenChange,
-  onSubmit,
+  onCommitStart,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSubmit: () => void
+  onCommitStart: (logs: string[], finished: boolean) => void
 }) {
-  const { author } = useCommitAuthor()
+  const { author, setAuthor } = useCommitAuthor()
+  const { selectedSave } = useSaves()
+  const [committing, setCommitting] = useState(false)
+  const [message, setMessage] = useState("-")
+  const [name, setName] = useState(author.name || "")
+  const [email, setEmail] = useState(author.email || "")
+
+  const branch = selectedSave?.default_branch ?? "main"
+
+  const handleSubmit = useCallback(async () => {
+    if (!selectedSave || committing) return
+    setCommitting(true)
+
+    const finalMessage = message || "-"
+
+    // Save author info if changed
+    if (name && (name !== author.name || email !== author.email)) {
+      try {
+        await setAuthor(name, email)
+      } catch {
+        // ignore
+      }
+    }
+
+    invoke<CommitResult>("perform_commit", {
+      saveDir: selectedSave.path,
+      gitDir: selectedSave.repo_path,
+      branch,
+      message: finalMessage,
+      extraPatterns: [],
+      ignorePatterns: [],
+      useRepack: false,
+    })
+      .then((result) => {
+        onCommitStart(result.logs, true)
+        if (!result.success) {
+          console.error("Commit failed:", result.error)
+        }
+      })
+      .catch((err) => {
+        onCommitStart([`Error: ${err}`], true)
+      })
+      .finally(() => {
+        setCommitting(false)
+        onOpenChange(false)
+      })
+  }, [
+    selectedSave,
+    committing,
+    message,
+    name,
+    email,
+    author.name,
+    author.email,
+    setAuthor,
+    branch,
+    onCommitStart,
+    onOpenChange,
+  ])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -52,12 +120,17 @@ function CommitDialog({
         </DialogHeader>
         <FieldGroup>
           <Field>
+            <Label htmlFor="branch">分支</Label>
+            <Input id="branch" name="branch" value={branch} disabled />
+          </Field>
+          <Field>
             <Label htmlFor="message">提交信息</Label>
             <Textarea
               id="message"
               name="message"
               placeholder="例如：刷怪塔完工"
-              defaultValue={"-"}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
             />
           </Field>
           <Field>
@@ -66,7 +139,8 @@ function CommitDialog({
               id="name"
               name="name"
               placeholder="例如：HairlessVillager"
-              defaultValue={author.name || undefined}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
             />
           </Field>
           <Field>
@@ -76,15 +150,22 @@ function CommitDialog({
               name="email"
               type="email"
               placeholder="例如：hairlessvilager@foxmail.com"
-              defaultValue={author.email || undefined}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
             />
           </Field>
         </FieldGroup>
         <DialogFooter>
           <DialogClose
-            render={<Button variant="outline">取消</Button>}
+            render={
+              <Button variant="outline" disabled={committing}>
+                取消
+              </Button>
+            }
           ></DialogClose>
-          <Button onClick={onSubmit}>提交</Button>
+          <Button onClick={handleSubmit} disabled={committing}>
+            {committing ? "提交中..." : "提交"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -281,11 +362,21 @@ export function HomePage() {
   const [pullDialogOpen, setPullDialogOpen] = useState(false)
   const [logDialogOpen, setLogDialogOpen] = useState(false)
   const [operation, setOperation] = useState<Operation>("commit")
+  const [commitLogs, setCommitLogs] = useState<string[]>([])
+  const [commitFinished, setCommitFinished] = useState(false)
 
-  const openLog = (op: Operation) => {
+  const openLog = (op: Operation, logs?: string[], finished?: boolean) => {
     setOperation(op)
+    if (logs !== undefined) setCommitLogs(logs)
+    if (finished !== undefined) setCommitFinished(finished)
     setLogDialogOpen(true)
   }
+
+  const handleCommitStart = useCallback((logs: string[], finished: boolean) => {
+    setCommitLogs(logs)
+    setCommitFinished(finished)
+    setLogDialogOpen(true)
+  }, [])
 
   const items = [
     {
@@ -320,10 +411,7 @@ export function HomePage() {
       <CommitDialog
         open={commitDialogOpen}
         onOpenChange={setCommitDialogOpen}
-        onSubmit={() => {
-          setCommitDialogOpen(false)
-          openLog("commit")
-        }}
+        onCommitStart={handleCommitStart}
       />
       <RestoreDialog
         open={restoreDialogOpen}
@@ -353,6 +441,8 @@ export function HomePage() {
         open={logDialogOpen}
         onOpenChange={setLogDialogOpen}
         operation={operation}
+        logs={commitLogs}
+        finished={commitFinished}
       />
     </div>
   )
