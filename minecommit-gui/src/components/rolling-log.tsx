@@ -168,7 +168,7 @@ function RollingLogContent({
                   {LEVEL_LABELS[entry.level]}
                 </span>
                 &nbsp;
-                <span className="break-all whitespace-pre-wrap">
+                <span className="break-all whitespace-pre-wrap [font-variant-ligatures:none]">
                   {entry.message}
                 </span>
               </div>
