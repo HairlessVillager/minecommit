@@ -178,8 +178,9 @@ fn main() -> Result<(), anyhow::Error> {
             commit,
         } => {
             if save_dir.exists() {
-                let bak = save_dir.with_extension("bak");
-                log::warn!("save_dir {save_dir:?} already exists, renaming to {bak:?}");
+                let ts = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S");
+                let bak = save_dir.with_extension(format!("{ts}.snapshot"));
+                log::info!("save_dir {save_dir:?} already exists, renaming to {bak:?}");
                 std::fs::rename(&save_dir, &bak).context("failed to rename save directory")?;
             }
             Config::new(save_dir, git_dir, vec![], vec![]).checkout(commit)?;

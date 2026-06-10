@@ -296,6 +296,105 @@ async fn perform_commit(
     })
 }
 
+// ─── Restore / Checkout ──────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PerformRestoreResult {
+    pub success: bool,
+    pub logs: Vec<LogLine>,
+    pub error: Option<String>,
+}
+
+#[tauri::command]
+async fn perform_restore(
+    app: tauri::AppHandle,
+    save_dir: String,
+    git_dir: String,
+) -> PerformRestoreResult {
+    init_logger();
+    take_logs(); // drain stale logs
+
+    // Spawn a blocking thread to periodically drain and emit captured logs
+    let running = Arc::new(AtomicBool::new(true));
+    let running_clone = running.clone();
+    let app_clone = app.clone();
+
+    let log_task = tauri::async_runtime::spawn_blocking(move || {
+        while running_clone.load(Ordering::Relaxed) {
+            let logs = take_logs();
+            for entry in &logs {
+                let _ = app_clone.emit("commit-log", entry);
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let logs = take_logs();
+        for entry in &logs {
+            let _ = app_clone.emit("commit-log", entry);
+        }
+    });
+
+    // Run the restore work on a blocking thread
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let save_dir_path = PathBuf::from(&save_dir);
+        let git_dir_path = PathBuf::from(&git_dir);
+
+        // If the save directory already exists, rename it to a timestamped snapshot
+        if save_dir_path.exists() {
+            let ts = Local::now().format("%Y-%m-%d_%H-%M-%S");
+            let bak = save_dir_path.with_extension(format!("{ts}.snapshot"));
+            log::warn!(
+                "save_dir {:?} already exists, renaming to {:?}",
+                save_dir_path,
+                bak
+            );
+            if let Err(e) = fs::rename(&save_dir_path, &bak) {
+                let msg = format!("Failed to rename existing save directory: {e}");
+                log::error!("{msg}");
+                return PerformRestoreResult {
+                    success: false,
+                    logs: vec![],
+                    error: Some(msg),
+                };
+            }
+        }
+
+        log::info!("Restoring save from HEAD...");
+
+        match Config::new(save_dir_path, git_dir_path, vec![], vec![]).checkout("HEAD".to_string()) {
+            Ok(()) => {
+                log::info!("Restore completed successfully");
+                PerformRestoreResult {
+                    success: true,
+                    logs: vec![],
+                    error: None,
+                }
+            }
+            Err(e) => {
+                let msg = format!("{e:#}");
+                log::error!("{msg}");
+                PerformRestoreResult {
+                    success: false,
+                    logs: vec![],
+                    error: Some(msg),
+                }
+            }
+        }
+    })
+    .await;
+
+    // Stop the log task and wait for final drain
+    running.store(false, Ordering::Relaxed);
+    let _ = log_task.await;
+
+    let _ = app.emit("commit-finished", ());
+
+    result.unwrap_or_else(|e| PerformRestoreResult {
+        success: false,
+        logs: vec![],
+        error: Some(format!("Join error: {e}")),
+    })
+}
+
 #[tauri::command]
 fn check_repo_exists(repo_path: String) -> Result<bool, String> {
     let output = Command::new("git")
@@ -607,6 +706,7 @@ pub fn run() {
             get_commit_author,
             set_commit_author,
             perform_commit,
+            perform_restore,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

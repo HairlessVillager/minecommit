@@ -3429,6 +3429,7 @@ name = "minecommit-cli"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "clap-verbosity-flag",
  "env_logger",

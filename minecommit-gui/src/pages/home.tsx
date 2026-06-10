@@ -170,39 +170,62 @@ function CommitDialog({
 function RestoreDialog({
   open,
   onOpenChange,
-  onSubmit,
+  onRestoreStart,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSubmit: () => void
+  onRestoreStart: () => void
 }) {
+  const { selectedSave } = useSaves()
+
+  const handleRestore = useCallback(async () => {
+    if (!selectedSave) return
+    onOpenChange(false)
+    onRestoreStart()
+
+    invoke<{ success: boolean; error: string | null }>("perform_restore", {
+      saveDir: selectedSave.path,
+      gitDir: selectedSave.repo_path,
+    })
+      .then((result) => {
+        if (!result.success) {
+          console.error("Restore failed:", result.error)
+        }
+      })
+      .catch((err) => {
+        console.error("Restore error:", err)
+      })
+  }, [selectedSave, onOpenChange, onRestoreStart])
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="min-w-lg break-all">
         <DialogHeader>
-          <DialogTitle>确定要恢复以下提交吗？</DialogTitle>
+          <DialogTitle>确定要恢复最近提交吗？</DialogTitle>
+          <DialogDescription>
+            这将会用 Git
+            仓库中最新的提交覆盖当前存档。如果存档已存在，将被重命名为
+            .&lt;时间戳&gt;.snapshot 备份。
+          </DialogDescription>
         </DialogHeader>
-        <ul className="ml-6 list-disc [&>li]:mt-2">
-          <li>
-            <span>时间</span>: 2026/05/30 11:27:24 +0800
-          </li>
-          <li>
-            <span>ID</span>: 5694bb8ccd107e3892ea565b056afa5de941fe47
-          </li>
-          <li>
-            <span>作者</span>: HairlessVillager
-            &lt;hairlessvillager@foxmail.com&gt;
-          </li>
-          <li>
-            <span>信息</span>: 刷怪塔完工
-          </li>
-        </ul>
+        {selectedSave && (
+          <ul className="ml-6 list-disc [&>li]:mt-2">
+            <li>
+              <span>存档</span>: {selectedSave.name}
+            </li>
+            <li>
+              <span>路径</span>: {selectedSave.path}
+            </li>
+            <li>
+              <span>仓库</span>: {selectedSave.repo_path}
+            </li>
+          </ul>
+        )}
         <DialogFooter>
           <DialogClose
             render={<Button variant="outline">取消</Button>}
           ></DialogClose>
-          <Button variant="secondary">全部提交</Button>
-          <Button onClick={onSubmit}>恢复</Button>
+          <Button onClick={handleRestore}>恢复</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -377,13 +400,11 @@ export function HomePage() {
     setLogDialogOpen(true)
   }
 
-  const handleCommitStart = useCallback(async () => {
-    // Clear previous state and set up event listeners before opening dialog
+  const setupLogListeners = useCallback(async (op: Operation) => {
     setCommitLogs([])
     setCommitFinished(false)
-    setOperation("commit")
+    setOperation(op)
 
-    // Clean up any previous listeners
     unlistenRefs.current.forEach((fn) => fn())
     unlistenRefs.current = []
 
@@ -397,6 +418,14 @@ export function HomePage() {
 
     setLogDialogOpen(true)
   }, [])
+
+  const handleCommitStart = useCallback(async () => {
+    await setupLogListeners("commit")
+  }, [setupLogListeners])
+
+  const handleRestoreStart = useCallback(async () => {
+    await setupLogListeners("restore")
+  }, [setupLogListeners])
 
   const items = [
     {
@@ -440,10 +469,7 @@ export function HomePage() {
       <RestoreDialog
         open={restoreDialogOpen}
         onOpenChange={setRestoreDialogOpen}
-        onSubmit={() => {
-          setRestoreDialogOpen(false)
-          openLog("restore")
-        }}
+        onRestoreStart={handleRestoreStart}
       />
       <PushDialog
         open={pushDialogOpen}
