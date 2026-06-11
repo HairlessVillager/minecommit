@@ -203,7 +203,7 @@ export function Dock({
       onMouseLeave={() => mouseX.set(Infinity)}
     >
       {items.map((item, i) => (
-        <React.Fragment key={i}>
+        <React.Fragment key={item.label}>
           <DockIcon
             item={item}
             mouseX={mouseX}

@@ -205,7 +205,7 @@ function highlightSearch(text: string, query: string): React.ReactNode {
   return parts.map((part, i) =>
     part.toLowerCase() === query.toLowerCase() ? (
       <mark
-        key={i}
+        key={`hl-${i}`}
         className="rounded-sm bg-amber-300/40 px-0.5 text-inherit dark:bg-amber-400/30"
       >
         {part}
@@ -427,7 +427,7 @@ function LogViewerTerminal({
             const colors = resolveLevelColors(entry.level, colorScale)
             return (
               <div
-                key={i}
+                key={`le-${i}`}
                 className="flex gap-3 border-b border-border/20 px-3 py-1 transition-colors hover:bg-muted/30"
               >
                 {lineNumbers && (
@@ -536,7 +536,7 @@ function LogViewerMinimal({
             const colors = resolveLevelColors(entry.level, colorScale)
             return (
               <div
-                key={i}
+                key={`lmin-${i}`}
                 className="flex items-start gap-2 border-b border-border/20 px-3 py-1.5"
               >
                 <Circle
@@ -798,7 +798,7 @@ function LogViewerFilterable({
             const colors = resolveLevelColors(entry.level, colorScale)
             return (
               <div
-                key={i}
+                key={`lf-${i}`}
                 className="flex items-start gap-3 border-b border-border/20 px-3 py-1.5 transition-colors hover:bg-muted/30"
               >
                 <Circle

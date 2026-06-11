@@ -42,7 +42,9 @@ function CommitDialog({
   const [committing, setCommitting] = useState(false)
   const [message, setMessage] = useState("-")
   const [name, setName] = useState(author.name || "")
+
   const [email, setEmail] = useState(author.email || "")
+
 
   const branch = selectedSave?.default_branch ?? "main"
 
@@ -227,6 +229,7 @@ function PushDialog({
   onPushStart: () => void
 }) {
   const { selectedSave } = useSaves()
+
   const [pushing, setPushing] = useState(false)
   const [remote, setRemote] = useState(selectedSave?.remote_repo_path ?? "")
   const [branch, setBranch] = useState(selectedSave?.default_branch ?? "main")
@@ -316,6 +319,7 @@ function PullDialog({
   const [remote, setRemote] = useState(selectedSave?.remote_repo_path ?? "")
   const [branch, setBranch] = useState(selectedSave?.default_branch ?? "main")
 
+
   const handlePull = useCallback(async () => {
     const save = selectedSave
     if (!save || pulling || !remote || !branch) return
@@ -390,13 +394,13 @@ function PullDialog({
 export function HomePage() {
   const { selectedSave } = useSaves()
   const [commitDialogOpen, setCommitDialogOpen] = useState(false)
-  const [commitDialogKey, setCommitDialogKey] = useState(0)
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false)
   const [pushDialogOpen, setPushDialogOpen] = useState(false)
-  const [pushDialogKey, setPushDialogKey] = useState(0)
   const [pullDialogOpen, setPullDialogOpen] = useState(false)
-  const [pullDialogKey, setPullDialogKey] = useState(0)
   const [logDialogOpen, setLogDialogOpen] = useState(false)
+  const [commitDialogKey, setCommitDialogKey] = useState(0)
+  const [pushDialogKey, setPushDialogKey] = useState(0)
+  const [pullDialogKey, setPullDialogKey] = useState(0)
   const [operation, setOperation] = useState<Operation>("commit")
   const [commitLogs, setCommitLogs] = useState<LogLine[]>([])
   const [commitFinished, setCommitFinished] = useState(false)
@@ -489,7 +493,7 @@ export function HomePage() {
         </SaveHoverCard>
       )}
       <CommitDialog
-        key={commitDialogKey}
+        key={`commit-${commitDialogKey}`}
         open={commitDialogOpen}
         onOpenChange={setCommitDialogOpen}
         onCommitStart={handleCommitStart}
@@ -500,13 +504,13 @@ export function HomePage() {
         onRestoreStart={handleRestoreStart}
       />
       <PushDialog
-        key={pushDialogKey}
+        key={`push-${pushDialogKey}`}
         open={pushDialogOpen}
         onOpenChange={setPushDialogOpen}
         onPushStart={handlePushStart}
       />
       <PullDialog
-        key={pullDialogKey}
+        key={`pull-${pullDialogKey}`}
         open={pullDialogOpen}
         onOpenChange={setPullDialogOpen}
         onPullStart={handlePullStart}

@@ -192,7 +192,7 @@ function RollingLogContent({
           entries.map((entry, i) => {
             const colors = DEFAULT_LEVEL_COLORS[entry.level]
             return (
-              <div key={i} className="flex">
+              <div key={`rl-${i}`} className="flex">
                 <span className="shrink-0 text-muted-foreground/60">
                   {formatTimestamp(entry.timestamp)}
                 </span>

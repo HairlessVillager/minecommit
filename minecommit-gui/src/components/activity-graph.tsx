@@ -9,7 +9,10 @@ export interface ActivityEntry {
   count: number
 }
 
-export interface ActivityGraphProps extends Omit<React.ComponentProps<"div">, "children"> {
+export interface ActivityGraphProps extends Omit<
+  React.ComponentProps<"div">,
+  "children"
+> {
   /** Activity data entries. */
   data: ActivityEntry[]
   /**
@@ -178,10 +181,7 @@ export function ActivityGraph({
   return (
     <div
       ref={containerRef}
-      className={cn(
-        isAutoFit ? "w-full" : "overflow-x-auto",
-        className
-      )}
+      className={cn(isAutoFit ? "w-full" : "overflow-x-auto", className)}
       role="img"
       aria-label="Activity graph"
       data-slot="activity-graph"
@@ -236,7 +236,10 @@ export function ActivityGraph({
               }}
             >
               {weeks.map((week, wi) => (
-                <div key={wi} style={{ display: "flex", flexDirection: "column", gap: GAP }}>
+                <div
+                  key={wi}
+                  style={{ display: "flex", flexDirection: "column", gap: GAP }}
+                >
                   {week.map((day, di) => {
                     const intensity = getIntensity(day.count, maxCount)
                     return (
@@ -244,24 +247,26 @@ export function ActivityGraph({
                         <Tooltip.Root>
                           <Tooltip.Trigger asChild>
                             <div
-                                                              className={cn(
-                                                                "transition-colors",
-                                                                colorScale[intensity]
-                                                              )}
-                                                              style={{
-                                                                width: blockSize,
-                                                                height: blockSize,
-                                                                borderRadius: blockRadius,
-                                                              }}
-                            /></Tooltip.Trigger>
+                              className={cn(
+                                "transition-colors",
+                                colorScale[intensity]
+                              )}
+                              style={{
+                                width: blockSize,
+                                height: blockSize,
+                                borderRadius: blockRadius,
+                              }}
+                            />
+                          </Tooltip.Trigger>
                           <Tooltip.Portal>
                             <Tooltip.Content
                               side="top"
                               sideOffset={4}
-                              className="z-50 rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95"
+                              className="z-50 animate-in rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-md fade-in-0 zoom-in-95"
                             >
                               <p className="font-medium">
-                                {day.count} contribution{day.count === 1 ? "" : "s"}
+                                {day.count} contribution
+                                {day.count === 1 ? "" : "s"}
                               </p>
                               <p className="text-muted-foreground">
                                 {formatDate(day.date)}
@@ -282,7 +287,7 @@ export function ActivityGraph({
             <span>Less</span>
             {colorScale.map((cls, i) => (
               <div
-                key={i}
+                key={`cs-${i}`}
                 className={cn(cls)}
                 style={{
                   width: blockSize,
