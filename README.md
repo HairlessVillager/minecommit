@@ -1,3 +1,5 @@
+English | [中文](/README-CN.md)
+
 <div align="center">
 
 ![logo](./minecommit-gui/src-tauri/icons/128x128@2x.png)
