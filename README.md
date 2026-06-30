@@ -31,10 +31,7 @@ MineCommit depends on an external `git` binary for the `commit` and `checkout` c
 
 ### Using the GUI
 
-> [!NOTE]
-> Still in development, comming soon.
-
-We provide a GUI build for Windows and Linux. Download the `minecommit-gui` executable from the [GitHub Release](https://github.com/HairlessVillager/minecommit/releases) page.
+We provide a GUI build for Windows users. Download the `minecommit-gui` executable from the [GitHub Release](https://github.com/HairlessVillager/minecommit/releases) page.
 
 The GUI is built with [Tauri](https://tauri.app/) (Rust backend) + [React](https://react.dev/) + [shadcn/ui](https://ui.shadcn.com/) (frontend), providing a WYSIWYG interface for basic backup and restore workflows.
 

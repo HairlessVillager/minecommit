@@ -31,10 +31,7 @@ MineCommit 依赖外部的 `git` 二进制文件来执行 `commit` 和 `checkout
 
 ### 使用 GUI (图形用户界面)
 
-> [!NOTE]
-> 仍在开发中，即将推出。
-
-我们为 Windows 和 Linux 提供了 GUI 版本。请从 [GitHub Release](https://github.com/HairlessVillager/minecommit/releases) 页面下载 `minecommit-gui` 可执行文件。
+我们为 Windows 用户提供了 GUI 版本。请从 [GitHub Release](https://github.com/HairlessVillager/minecommit/releases) 页面下载 `minecommit-gui` 可执行文件。
 
 该 GUI 使用了 [Tauri](https://tauri.app/) + [React](https://react.dev/) + [shadcn/ui](https://ui.shadcn.com/) 构建，提供了一个所见即所得 (WYSIWYG) 的界面，用于基本的备份和恢复工作流。
 
